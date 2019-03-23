@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">Phonetic</string>
+    <string name="app_set">Settings</string>
+    <string name="app_language">Language</string>
+    <string name="app_sound">Sound Source</string>
+    <string name="app_about">About us</string>
+</resources>
