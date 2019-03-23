@@ -19,6 +19,7 @@ import android.os.Bundle;
 import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
+import android.util.Xml;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Button;
@@ -52,23 +53,23 @@ import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Enumeration;
+import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
-    private String Source_Language = "English";
-    private String Target_Language = "简体中文";
+    private String Source_Language = "简体中文";
+    private String Target_Language = "English";
     private String Sound_Source = "Male Voice";
+    private String Access_token="24.52c02409824c18185bc010857406ea71.2592000.1555470322.282335-15779455";
     private String RecognizeResult =null;
     private String TranslateResult = null;
 
-
     private ImageView mIvPressToSay, mIvPlay;
     private TextView mTvTxt;
-    private TextToSpeech textToSpeech;
-
 
     private static final int mAudioSource = MediaRecorder.AudioSource.MIC;
     //指定采样率 （MediaRecoder 的采样率通常是8000Hz AAC的通常是44100Hz。 设置采样率为44100，目前为常用的采样率，官方文档表示这个值可以兼容所有的设置）
@@ -83,15 +84,15 @@ public class MainActivity extends AppCompatActivity {
     //创建AudioRecord。AudioRecord类实际上不会保存捕获的音频，因此需要手动创建文件并保存下载。
     private AudioRecord mAudioRecord = null;//创建AudioRecorder对象
 
+    private MediaPlayer mPlayer = null;
 
     private File mAudioFile;
+    private File mAudioResultFile;
 
     private Handler mMainThreadHandler;
 
     private boolean isRecording;
     private boolean displayFlag=false;
-    //正在播放为true,反之为false
-    private boolean displayState = false;
 
     @Override
     protected void onCreate(final Bundle savedInstanceState) {
@@ -129,31 +130,7 @@ public class MainActivity extends AppCompatActivity {
         mIvPlay.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                btnPlay(v);
-            }
-        });
-
-        textToSpeech = new TextToSpeech(this, new TextToSpeech.OnInitListener() {
-            @Override
-            public void onInit(int status) {
-                if (status == textToSpeech.SUCCESS) {
-                    if(Target_Language=="简体中文"){
-                        int result = textToSpeech.setLanguage(Locale.CHINA);
-                        if (result != TextToSpeech.LANG_COUNTRY_AVAILABLE
-                                && result != TextToSpeech.LANG_AVAILABLE){
-                            Toast.makeText(MainActivity.this, "TTS暂时不支持简体中文的朗读！",
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                    else if(Target_Language=="English") {
-                        int result = textToSpeech.setLanguage(Locale.ENGLISH);
-                        if (result != TextToSpeech.LANG_COUNTRY_AVAILABLE
-                                && result != TextToSpeech.LANG_AVAILABLE) {
-                            Toast.makeText(MainActivity.this, "TTS暂时不支持English的朗读！",
-                                    Toast.LENGTH_SHORT).show();
-                        }
-                    }
-                }
+                btn_play();
             }
         });
 
@@ -187,13 +164,12 @@ public class MainActivity extends AppCompatActivity {
         stopRecord();
     }
 
-    /**
-     * 开始录音
-     */
+    /** Start Record*/
     private void startRecord() {
         //改变UI状态
         mTvTxt = (TextView) findViewById(R.id.textView);
         mTvTxt.setText("Release and Stop");
+        mIvPressToSay.setImageResource(R.drawable.microphone_onclick);
         //提交后台任务，执行录音逻辑
         new Thread(new Runnable() {
             @Override
@@ -203,9 +179,23 @@ public class MainActivity extends AppCompatActivity {
         }).start();
     }
 
-    /**
-     * 启动录音逻辑     *     * @return
-     */
+    /** Stop Record*/
+    private void stopRecord() {
+        //改变UI状态
+        mTvTxt = (TextView) findViewById(R.id.textView);
+        mTvTxt.setText("Hold and Talk");
+        mIvPressToSay.setImageResource(R.drawable.microphone);
+        Toast.makeText(MainActivity.this,"Please wait while translating",Toast.LENGTH_LONG).show();
+        //提交后台任务，执行停止逻辑
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                doStop();
+            }
+        }).start();
+    }
+
+    /** Start Record logic*/
     private void doStart() {
         //创建AudioRecord
         mAudioRecord = new AudioRecord(mAudioSource, mSampleRateInHz, mChannelConfig, mAudioFormat, mBufferSizeInBytes);
@@ -250,9 +240,8 @@ public class MainActivity extends AppCompatActivity {
         }
 
     }
-    /**
-     * 停止录音逻辑     *     * @return
-     */
+
+    /** Stop Record logic*/
     private void doStop() {
         isRecording = false;
         //停止录音，回收AudioRecord对象，释放内存
@@ -266,9 +255,7 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    /**
-     * 录音错误处理
-     */
+    /** Record Error logic*/
     private void recordFail() {
         mAudioFile = null;
         //给用户toast提示失败，主要在主线程执行
@@ -279,47 +266,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-    /**
-     * 停止录音
-     */
-    private void stopRecord() {
-        //改变UI状态
-        mTvTxt = (TextView) findViewById(R.id.textView);
-        mTvTxt.setText("Hold and Talk");
-        Toast.makeText(MainActivity.this,"Please wait while translating",Toast.LENGTH_LONG).show();
-        //提交后台任务，执行停止逻辑
-        new Thread(new Runnable() {
-            @Override
-            public void run() {
-                doStop();
-            }
-        }).start();
-    }
 
-    public void btnPlay(View v) {
-        if(!displayFlag){
-            Toast.makeText(MainActivity.this,"Please wait moment",Toast.LENGTH_LONG).show();
-        }
-        else {
-            if(!displayState){
-                //开始播放
-                displayState=true;
-                if(Target_Language.equals("简体中文")){
-                    //测试发现，android默认没有中文语音包，无法朗读
-                    textToSpeech.setLanguage(Locale.CHINA);
-                }
-                else if(Target_Language.equals("English")){
-                    textToSpeech.setLanguage(Locale.ENGLISH);
-                }
-                textToSpeech.speak(TranslateResult, TextToSpeech.QUEUE_ADD, null);
-            }
-            else{
-                //取消播放
-                displayState=false;
-                textToSpeech.stop();
-            }
-        }
-    }
     /** 调用识别api*/
     private void sendFileToBaidu(final String nowlanguage){
         new Thread(new Runnable() {
@@ -341,7 +288,7 @@ public class MainActivity extends AppCompatActivity {
                         object.put("dev_pid", 1737);
                     }
                     object.put("channel", 1);
-                    object.put("token", "24.52c02409824c18185bc010857406ea71.2592000.1555470322.282335-15779455");
+                    object.put("token", Access_token);
                     object.put("cuid", getLocalMacAddressFromIp(MainActivity.this));
                     object.put("len", buffer.length);
                     object.put("speech",byteString);
@@ -463,19 +410,16 @@ public class MainActivity extends AppCompatActivity {
         String to=null;
         if(Target_Language.equals("简体中文")){
             to="zh";
-            RecognizeResult=RecognizeResult.replaceAll(" ","");
         }
         else if(Target_Language.equals("English")){
             to="en";
         }
-        String salt = String.valueOf(System.currentTimeMillis());
-
-        String src = APP_ID + RecognizeResult + salt + APP_SECRET;
-
-        String sign=md5(src);
-
-        String realUrl=Baidu_URL+"?"+"q="+RecognizeResult+"&from="+from+"&to="+to+"&appid="+APP_ID+"&salt="+salt+"&sign="+sign;
         try{
+            String salt = String.valueOf(System.currentTimeMillis());
+            String src = APP_ID + RecognizeResult + salt + APP_SECRET;
+            String sign=md5(src);
+            String query = URLEncoder.encode(RecognizeResult,"UTF-8");
+            String realUrl=Baidu_URL+"?"+"q="+query+"&from="+from+"&to="+to+"&appid="+APP_ID+"&salt="+salt+"&sign="+sign;
             URL url = new URL(realUrl);
             HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
             urlConnection.setRequestMethod("GET");
@@ -498,8 +442,8 @@ public class MainActivity extends AppCompatActivity {
                 reader.close();
                 urlConnection.disconnect();
                 displayFlag=true;
+                AudioDisplay();
             }
-
         }
         catch (MalformedURLException e){
             e.printStackTrace();
@@ -541,7 +485,73 @@ public class MainActivity extends AppCompatActivity {
         return new String(resultCharArray);
     }
 
+    /** get mp3 logic*/
+    public void AudioDisplay() {
+        new Thread(new Runnable() {
+            @Override
+            public void run() {
+                try{
+                    String stringUrl="https://tsn.baidu.com/text2audio";
+                    String text=URLEncoder.encode(TranslateResult,"UTF-8");
+                    text=URLEncoder.encode(text,"UTF-8");
+                    //0,普通女声
+                    //1，普通男声
+                    //3，情感合成度逍遥
+                    //4，情感合成度丫丫
+                    String per="1";
+                    String realUrl=stringUrl+"?tex="+text+"&lan=zh&cuid="+getLocalMacAddressFromIp(MainActivity.this)+"&cpt=1"+"tok="+Access_token+"&per="+per;
+                    URL url = new URL(realUrl);
+                    HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
+                    urlConnection.setRequestMethod("GET");
+                    urlConnection.connect();
+                    mAudioResultFile=new File(Environment.getExternalStorageDirectory().getAbsolutePath(), System.currentTimeMillis() + ".mp3");
+                    if (mAudioResultFile.exists()) {//音频文件保存过了删除
+                        mAudioResultFile.delete();
+                    }
+                    mAudioResultFile.createNewFile();//创建新文件
+                    InputStream inputStream = urlConnection.getInputStream();
+                    Map<String, List<String>> headers = urlConnection.getHeaderFields();
+                    // 遍历所有的响应头字段
+                    for (String key : headers.keySet()) {
+                        System.out.println(key + "--->" + headers.get(key));
+                    }
+                    FileOutputStream outputStream = new FileOutputStream(mAudioResultFile);
+                    byte[] buffer = new byte[1024];
+                    int len = -1;
+                    while ((len=inputStream.read(buffer))!=-1) {
+                        outputStream.write(buffer,0,len);
+                    }
+                    outputStream.close();
+                    mPlayer=new MediaPlayer();
+                    mPlayer.setDataSource(mAudioResultFile.getPath());
+                    mPlayer.prepare();
+                    mPlayer.start();
+                    displayFlag=true;
+                } catch (ProtocolException e) {
+                    e.printStackTrace();
+                } catch (MalformedURLException e) {
+                    e.printStackTrace();
+                } catch (IOException e) {
+                    e.printStackTrace();
+                }
+            }
+        }).start();
+    }
 
+    /** display logic*/
+    void btn_play(){
+        if(!displayFlag){
+            Toast.makeText(MainActivity.this,"Please wait moment",Toast.LENGTH_LONG).show();
+        }
+        else {
+            try{
+                mPlayer.prepare();
+                mPlayer.start();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
+    }
 }
 
 
