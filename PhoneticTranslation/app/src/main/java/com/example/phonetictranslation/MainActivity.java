@@ -1,28 +1,25 @@
 package com.example.phonetictranslation;
 
+import android.Manifest;
 import android.app.ActionBar;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.media.AudioFormat;
-import android.media.AudioManager;
 import android.media.AudioRecord;
-import android.media.AudioTrack;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
-import android.os.Build;
 import android.os.Environment;
 import android.os.Looper;
-import android.speech.tts.TextToSpeech;
+import android.support.v4.app.ActivityCompat;
+import android.support.v4.content.ContextCompat;
 import android.support.v7.app.AppCompatActivity;
 import android.os.Handler;
 import android.os.Bundle;
-import android.text.TextUtils;
 import android.util.Base64;
 import android.util.Log;
-import android.util.Xml;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.Button;
 import android.widget.ImageView;
 import android.widget.TextView;
 import android.widget.Toast;
@@ -33,6 +30,7 @@ import org.json.JSONObject;
 
 import java.io.BufferedOutputStream;
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
@@ -53,23 +51,20 @@ import java.net.URLEncoder;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Enumeration;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "MainActivity";
     private String Source_Language = "简体中文";
     private String Target_Language = "English";
-    private String Sound_Source = "Male Voice";
+    private String Sound_Source = "common female voice";
     private String Access_token="24.52c02409824c18185bc010857406ea71.2592000.1555470322.282335-15779455";
     private String RecognizeResult =null;
     private String TranslateResult = null;
 
-    private ImageView mIvPressToSay, mIvPlay;
+    private ImageView mIvPressToSay;
+    private ImageView mIvPlay;
     private TextView mTvTxt;
+    private TextView textView_loading;
 
     private static final int mAudioSource = MediaRecorder.AudioSource.MIC;
     //指定采样率 （MediaRecoder 的采样率通常是8000Hz AAC的通常是44100Hz。 设置采样率为44100，目前为常用的采样率，官方文档表示这个值可以兼容所有的设置）
@@ -103,7 +98,10 @@ public class MainActivity extends AppCompatActivity {
         actionBar.setDisplayOptions(ActionBar.DISPLAY_SHOW_CUSTOM);
         mIvPressToSay = (ImageView) findViewById(R.id.imageView);
         mIvPlay = (ImageView) findViewById(R.id.imageView2);
+        textView_loading = (TextView)findViewById(R.id.textView_loading);
         mMainThreadHandler = new Handler(Looper.getMainLooper());
+
+        requestAllPower();
 
         mIvPressToSay.setOnTouchListener(new View.OnTouchListener() {
             @Override
@@ -118,6 +116,8 @@ public class MainActivity extends AppCompatActivity {
                     case MotionEvent.ACTION_CANCEL:
                         Log.d(TAG, "抬起: ");
                         stopRecord();
+                        textView_loading.setVisibility(View.VISIBLE);
+                        sendFileToBaidu(Source_Language);
                         break;
                     default:
                         break;
@@ -134,6 +134,24 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+    }
+
+    public void requestAllPower() {
+        if (ContextCompat.checkSelfPermission(this,
+                Manifest.permission.RECORD_AUDIO)
+                != PackageManager.PERMISSION_GRANTED||ContextCompat.checkSelfPermission(this,
+                Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED||ContextCompat.checkSelfPermission(this,
+                Manifest.permission.READ_EXTERNAL_STORAGE)
+                != PackageManager.PERMISSION_GRANTED) {
+            if (ActivityCompat.shouldShowRequestPermissionRationale(this,
+                    Manifest.permission.RECORD_AUDIO)) {
+            } else {
+                ActivityCompat.requestPermissions(this,
+                        new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE,
+                                Manifest.permission.READ_EXTERNAL_STORAGE,Manifest.permission.RECORD_AUDIO}, 1);
+            }
+        }
     }
 
     public void Set_click(View view) {
@@ -185,7 +203,6 @@ public class MainActivity extends AppCompatActivity {
         mTvTxt = (TextView) findViewById(R.id.textView);
         mTvTxt.setText("Hold and Talk");
         mIvPressToSay.setImageResource(R.drawable.microphone);
-        Toast.makeText(MainActivity.this,"Please wait while translating",Toast.LENGTH_LONG).show();
         //提交后台任务，执行停止逻辑
         new Thread(new Runnable() {
             @Override
@@ -198,6 +215,10 @@ public class MainActivity extends AppCompatActivity {
     /** Start Record logic*/
     private void doStart() {
         //创建AudioRecord
+        if(mAudioResultFile!=null){
+            mAudioResultFile.delete();
+        }
+        displayFlag=false;
         mAudioRecord = new AudioRecord(mAudioSource, mSampleRateInHz, mChannelConfig, mAudioFormat, mBufferSizeInBytes);
         if (AudioRecord.ERROR_BAD_VALUE == mBufferSizeInBytes || AudioRecord.ERROR == mBufferSizeInBytes) {
             throw new RuntimeException("Unable to getMinBufferSize");
@@ -232,7 +253,6 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
             mDataOutputStream.close();
-            sendFileToBaidu(Source_Language);
         } catch (Throwable t) {
             Log.e(TAG, "Recording Failed");
             stopRecord();
@@ -262,7 +282,7 @@ public class MainActivity extends AppCompatActivity {
         mMainThreadHandler.post(new Runnable() {
             @Override
             public void run() {
-                Toast.makeText(MainActivity.this, "录音失败", Toast.LENGTH_SHORT).show();
+                Toast.makeText(MainActivity.this, "Record failure", Toast.LENGTH_SHORT).show();
             }
         });
     }
@@ -330,14 +350,28 @@ public class MainActivity extends AppCompatActivity {
                             sentStringToBaidu();
                         }
                         else {
-                            Log.d(TAG, "error ");
                             inputStream.close();
                             reader.close();
                             urlConnection.disconnect();
+                            mAudioFile.delete();
+                            mMainThreadHandler.post(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Toast.makeText(MainActivity.this,"Error in recognize,Please speak again",Toast.LENGTH_LONG).show();
+                                    textView_loading.setVisibility(View.INVISIBLE);
+                                }
+                            });
                         }
                     }
                     else{
-                        Toast.makeText(MainActivity.this,"Error in recognize",Toast.LENGTH_LONG).show();
+                        mAudioFile.delete();
+                        mMainThreadHandler.post(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MainActivity.this,"Http Error,Please check internet",Toast.LENGTH_LONG).show();
+                                textView_loading.setVisibility(View.INVISIBLE);
+                            }
+                        });
                     }
                 }
                 catch (MalformedURLException e) {
@@ -397,7 +431,6 @@ public class MainActivity extends AppCompatActivity {
         } catch (SocketException ex) {
             Log.e(TAG, ex.toString());
         }
-
         return null;
     }
 
@@ -494,44 +527,94 @@ public class MainActivity extends AppCompatActivity {
                     String stringUrl="https://tsn.baidu.com/text2audio";
                     String text=URLEncoder.encode(TranslateResult,"UTF-8");
                     text=URLEncoder.encode(text,"UTF-8");
-                    //0,普通女声
-                    //1，普通男声
-                    //3，情感合成度逍遥
-                    //4，情感合成度丫丫
+                    //0, common female voice
+                    //1, common male voice
+                    //3, emotional synthesis degree of freedom
+                    //4, emotional synthesis ya-ya
                     String per="1";
-                    String realUrl=stringUrl+"?tex="+text+"&lan=zh&cuid="+getLocalMacAddressFromIp(MainActivity.this)+"&cpt=1"+"tok="+Access_token+"&per="+per;
+                    if(Sound_Source.equals("common female voice")){
+                        per="0";
+                    }
+                    else if(Sound_Source.equals("common male voice")){
+                        per="1";
+                    }
+                    else if(Sound_Source.equals("emotional synthesis degree of freedom")){
+                        per="3";
+                    }
+                    else if(Sound_Source.equals("emotional synthesis ya-ya")){
+                        per="4";
+                    }
+                    String realUrl=stringUrl+"?tex="+text+"&lan=zh&cuid="+getLocalMacAddressFromIp(MainActivity.this)+"&ctp=1&"+"tok="+Access_token+"&per="+per;
                     URL url = new URL(realUrl);
                     HttpURLConnection urlConnection = (HttpURLConnection) url.openConnection();
                     urlConnection.setRequestMethod("GET");
                     urlConnection.connect();
-                    mAudioResultFile=new File(Environment.getExternalStorageDirectory().getAbsolutePath(), System.currentTimeMillis() + ".mp3");
-                    if (mAudioResultFile.exists()) {//音频文件保存过了删除
-                        mAudioResultFile.delete();
+                    String contentType = urlConnection.getContentType();
+                    if (contentType.contains("audio/")) {
+                        int responseCode = urlConnection.getResponseCode();
+                        if (responseCode != 200) {
+                            throw new Exception("http response code is" + responseCode);
+                        }
+                        InputStream inputStream = urlConnection.getInputStream();
+                        byte[] b = new byte[1024];
+                        // 定义一个输出流存储接收到的数据
+                        ByteArrayOutputStream byteArrayOutputStream = new ByteArrayOutputStream();
+                        // 开始接收数据
+                        int len = 0;
+                        while (true) {
+                            len = inputStream.read(b);
+                            if (len == -1) {
+                                // 数据读完
+                                break;
+                            }
+                            byteArrayOutputStream.write(b, 0, len);
+                        }
+                        byte[] result=byteArrayOutputStream.toByteArray();
+                        mAudioResultFile=new File(Environment.getExternalStorageDirectory().getAbsolutePath(), System.currentTimeMillis() + ".mp3");
+                        if (mAudioResultFile.exists()) {//音频文件保存过了删除
+                            mAudioResultFile.delete();
+                        }
+                        mAudioResultFile.createNewFile();//创建新文件
+                        FileOutputStream os = new FileOutputStream(mAudioResultFile);
+                        os.write(result);
+                        os.close();
+                    } else {
+                        InputStream inputStream = urlConnection.getInputStream();
+                        StringBuffer Stringbuffer = new StringBuffer();
+                        BufferedReader reader = new BufferedReader(new InputStreamReader(inputStream));
+                        String line;
+                        while ((line = reader.readLine()) != null) {
+                            Stringbuffer.append(line + "\n");
+                        }
+                        String resultJson=Stringbuffer.toString();
+                        JSONObject Json=new JSONObject(resultJson);
+                        //error
                     }
-                    mAudioResultFile.createNewFile();//创建新文件
-                    InputStream inputStream = urlConnection.getInputStream();
-                    Map<String, List<String>> headers = urlConnection.getHeaderFields();
-                    // 遍历所有的响应头字段
-                    for (String key : headers.keySet()) {
-                        System.out.println(key + "--->" + headers.get(key));
-                    }
-                    FileOutputStream outputStream = new FileOutputStream(mAudioResultFile);
-                    byte[] buffer = new byte[1024];
-                    int len = -1;
-                    while ((len=inputStream.read(buffer))!=-1) {
-                        outputStream.write(buffer,0,len);
-                    }
-                    outputStream.close();
+                    mMainThreadHandler.post(new Runnable() {
+                        @Override
+                        public void run() {
+                            textView_loading.setVisibility(View.INVISIBLE);
+                        }
+                    });
                     mPlayer=new MediaPlayer();
+                    mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                        @Override
+                        public void onCompletion(MediaPlayer mp) {
+                            mPlayer.release();
+                            displayFlag=true;
+                        }
+                    });
                     mPlayer.setDataSource(mAudioResultFile.getPath());
                     mPlayer.prepare();
+                    displayFlag=false;
                     mPlayer.start();
-                    displayFlag=true;
                 } catch (ProtocolException e) {
                     e.printStackTrace();
                 } catch (MalformedURLException e) {
                     e.printStackTrace();
                 } catch (IOException e) {
+                    e.printStackTrace();
+                } catch (Exception e) {
                     e.printStackTrace();
                 }
             }
@@ -545,6 +628,16 @@ public class MainActivity extends AppCompatActivity {
         }
         else {
             try{
+                displayFlag=false;
+                mPlayer=new MediaPlayer();
+                mPlayer.setOnCompletionListener(new MediaPlayer.OnCompletionListener() {
+                    @Override
+                    public void onCompletion(MediaPlayer mp) {
+                        mPlayer.release();
+                        displayFlag=true;
+                    }
+                });
+                mPlayer.setDataSource(mAudioResultFile.getPath());
                 mPlayer.prepare();
                 mPlayer.start();
             } catch (IOException e) {

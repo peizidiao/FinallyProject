@@ -5,5 +5,20 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".SoundActivity">
+    <ListView
+        android:id="@+id/ListView4"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:listSelector="#249FF3"
+        app:layout_constraintTop_toTopOf="parent" />
 
+    <Button
+        android:id="@+id/button_Confirm1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Confirm"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        android:onClick="btn_confirm"/>
 </android.support.constraint.ConstraintLayout>

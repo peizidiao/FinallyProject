@@ -62,11 +62,15 @@ public class SetActivity extends AppCompatActivity {
                     Intent intent =new Intent(SetActivity.this,LanguageActivity.class);
                     intent.putExtra("Source_Language", Source_Language);
                     intent.putExtra("Target_Language", Target_Language);
+                    intent.putExtra("Sound_Source", Sound_Source);
                     startActivityForResult(intent,1);
                 }
                 else if(item.getTitle().equals("Sound Source")){
                     //跳转，这里应该要传值回来
                     Intent intent =new Intent(SetActivity.this,SoundActivity.class);
+                    intent.putExtra("Source_Language", Source_Language);
+                    intent.putExtra("Target_Language", Target_Language);
+                    intent.putExtra("Sound_Source", Sound_Source);
                     startActivityForResult(intent,2);
                 }
             }
@@ -102,6 +106,10 @@ public class SetActivity extends AppCompatActivity {
             case 2:
                 if (resultCode == RESULT_OK) {
                     Sound_Source = data.getStringExtra("Sound_Source");
+                    list1.clear();
+                    list1.add(new listview_item("Language",Source_Language+" To "+Target_Language));
+                    list1.add(new listview_item("Sound Source",Sound_Source));
+                    adapter.notifyDataSetChanged();
                 }
         }
     }

@@ -7,6 +7,20 @@
     android:background="@drawable/img7902169604dfa88"
     tools:context=".MainActivity">
 
+    <TextView
+        android:id="@+id/textView_loading"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="30dp"
+        android:text="LOADING..."
+        android:textStyle="bold"
+        android:textSize="30dp"
+        android:textColor="#ffffff"
+        android:visibility="invisible"
+        app:layout_constraintLeft_toLeftOf="parent"
+        app:layout_constraintRight_toRightOf="parent"
+        app:layout_constraintTop_toTopOf="parent" />
+
     <ImageView
         android:id="@+id/imageView"
         android:layout_width="wrap_content"

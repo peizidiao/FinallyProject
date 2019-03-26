@@ -16,6 +16,7 @@ import android.widget.Toast;
 public class LanguageActivity extends AppCompatActivity {
     private String Source_language = null;
     private String Target_Language = null;
+    private String Sound_Source = null;
     private String data[]=new String[2];
     private String selection1="简体中文 To English";
     private String selection2="English To 简体中文";
@@ -31,7 +32,7 @@ public class LanguageActivity extends AppCompatActivity {
         Intent intent=getIntent();
         Source_language=intent.getStringExtra("Source_Language");
         Target_Language=intent.getStringExtra("Target_Language");
-;
+        Sound_Source=intent.getStringExtra("Sound_Source");
         data[0]=selection1;
         data[1]=selection2;
         ArrayAdapter<String> adapter=new ArrayAdapter<String> (LanguageActivity.this,android.R.layout.simple_list_item_1,data);
@@ -56,6 +57,7 @@ public class LanguageActivity extends AppCompatActivity {
         Intent intent=new Intent();
         intent.putExtra("Source_Language",Source_language);
         intent.putExtra("Target_Language",Target_Language);
+        intent.putExtra("Sound_Source",Sound_Source);
         setResult(RESULT_OK,intent);
         finish();
     }
@@ -66,6 +68,7 @@ public class LanguageActivity extends AppCompatActivity {
             Intent intent=new Intent();
             intent.putExtra("Source_Language",Source_language);
             intent.putExtra("Target_Language",Target_Language);
+            intent.putExtra("Sound_Source",Sound_Source);
             setResult(RESULT_OK,intent);
         }
         return super.onKeyDown(KeyCode,event);
@@ -78,6 +81,7 @@ public class LanguageActivity extends AppCompatActivity {
             Intent intent=new Intent();
             intent.putExtra("Source_Language",Source_language);
             intent.putExtra("Target_Language",Target_Language);
+            intent.putExtra("Sound_Source",Sound_Source);
             setResult(RESULT_OK,intent);
             finish();
         }
@@ -87,6 +91,7 @@ public class LanguageActivity extends AppCompatActivity {
             Intent intent=new Intent();
             intent.putExtra("Source_Language",Source_language);
             intent.putExtra("Target_Language",Target_Language);
+            intent.putExtra("Sound_Source",Sound_Source);
             setResult(RESULT_OK,intent);
             finish();
         }
